@@ -1,0 +1,29 @@
+{
+  "name": "mahjongsheet_web",
+  "version": "1.0.0",
+  "description": "",
+  "keywords": [],
+  "homepage": "https://github.com/gackhc/mahjongsheet_web#readme",
+  "bugs": {
+    "url": "https://github.com/gackhc/mahjongsheet_web/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gackhc/mahjongsheet_web.git"
+  },
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "vite public",
+    "build": "firebase deploy --only hosting",
+    "dh": "firebase deploy --only hosting",
+    "df": "firebase deploy --only functions",
+    "da": "firebase deploy --only hosting,functions"
+  },
+  "devDependencies": {
+    "vite": "^8.0.3"
+  }
+}

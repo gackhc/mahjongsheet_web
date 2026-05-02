@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>마작기록장</title>
+    <link rel="stylesheet" href="style.css"> 
+    <script type="module">
+        import { t, getLanguage, setLanguage } from './main/translations.js'; // 경로 확인 필요
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const lang = getLanguage();
+            document.documentElement.lang = lang;
+            document.title = t('login_title');
+
+            // 초기 텍스트 세팅
+            document.querySelector('.target').innerHTML = `${t('total_score')} (${t('target')}: 100,000)`;
+            document.getElementById('score-status').innerText = `100000 ${t('need')}`;
+            
+            // 🌟 로그아웃 버튼 다국어 적용 추가
+            const logoutBtn = document.getElementById('logoutBtn');
+            if (logoutBtn) logoutBtn.innerText = t('logout');
+            
+            document.getElementById('round-south').innerText = t('round_south');
+            document.getElementById('round-east').innerText = t('round_east');
+            document.getElementById('deposit').placeholder = t('deposit');
+            document.getElementById('saveBtn').innerText = t('save_record');
+            document.getElementById('history-content').innerText = t('loading');
+            document.getElementById('stat-content').innerText = t('calc_stats');
+
+            const navTexts = document.querySelectorAll('.nav-text');
+            navTexts[0].innerText = t('input');
+            navTexts[1].innerText = t('history');
+            navTexts[2].innerText = t('stats');
+
+            // 언어 선택기 설정
+            const langSelect = document.getElementById('language-select');
+            if (langSelect) {
+                langSelect.value = lang;
+                langSelect.addEventListener('change', (e) => {
+                    setLanguage(e.target.value);
+                });
+            }
+        });
+    </script>
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2543230676600305"
+     crossorigin="anonymous"></script>
+</head>
+<body>
+<div class="app-container">
+    <div style="display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding: 10px;">
+        <select id="language-select" style="padding: 5px; border-radius: 5px;">
+            <option value="ko">한국어</option>
+            <option value="en">English</option>
+            <option value="ja">日本語</option>
+            <option value="zh">中文</option>
+        </select>
+        <button id="logoutBtn" style="padding: 5px 10px; border-radius: 5px; border: 1px solid #ccc; background: #fff; cursor: pointer; font-size: 12px; color: #333;">로그아웃</button>
+    </div>
+
+    <div id="view-input" class="content-area">
+        <div id="scoreboard" class="score-board">
+            <div class="info">
+                <div class="target">합계 점수 (목표: 100,000)</div>
+                <div id="score-status" class="need">100000 필요</div>
+            </div>
+            <div id="total-sum" class="total-score">0</div>
+        </div>
+
+        <div class="control-row">
+            <button id="round-south" class="segmented-btn active">남장</button>
+            <button id="round-east" class="segmented-btn">동장</button>
+            
+            <div class="input-box-wrapper" id="deposit-wrapper">
+                <input type="number" id="deposit" placeholder="공탁금">
+                <span class="input-suffix">00</span>
+            </div>
+        </div>
+
+        <div class="player-list" id="player-inputs">
+        </div>
+
+        <button id="saveBtn" class="save-btn" disabled>기록 저장하기</button>
+    </div>
+
+    <div id="view-list" class="content-area hidden">
+        <div id="history-content">데이터를 불러오는 중...</div>
+    </div>
+
+    <div id="view-stat" class="content-area hidden">
+        <div id="stat-content">통계 계산 중...</div>
+    </div>
+
+    <div class="bottom-nav">
+        <div class="nav-item active" data-view="input">
+            <div class="nav-icon">➕</div><div class="nav-text">입력</div>
+        </div>
+        <div class="nav-item" data-view="list">
+            <div class="nav-icon">≡</div><div class="nav-text">기록</div>
+        </div>
+        <div class="nav-item" data-view="stat">
+            <div class="nav-icon">★</div><div class="nav-text">통계</div>
+        </div>
+    </div>
+</div>
+
+<script type="module" src="./main/app.js"></script>
+</body>
+</html>

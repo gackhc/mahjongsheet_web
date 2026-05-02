@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mahjong Sheet</title>
+    <style>
+        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+        /* 메인 페이지와 동일한 화이트톤 팔레트 */
+        :root {
+            --bg-main: #f8fafc;
+            --text-main: #1e293b;
+            --text-sub: #475569;
+            --green: #10b981;
+            --shadow: 0 20px 40px rgba(0, 0, 0, 0.04);
+            --line: rgba(0, 0, 0, 0.08);
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-main);
+            /* 메인 페이지와 동일한 은은한 배경 그라데이션 */
+            background-image: 
+                radial-gradient(circle at top left, rgba(79, 70, 229, 0.05), transparent 40%),
+                radial-gradient(circle at bottom right, rgba(16, 185, 129, 0.05), transparent 40%);
+            color: var(--text-main);
+        }
+
+        /* 화이트 글래스모피즘 컨테이너 */
+        .container {
+            width: 100%;
+            max-width: 400px;
+            margin: 20px;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            padding: 48px 28px;
+            border-radius: 32px;
+            box-shadow: var(--shadow);
+            border: 1px solid rgba(255, 255, 255, 0.7);
+            text-align: center;
+            box-sizing: border-box;
+        }
+
+        /* 토스/애플 스타일의 부드러운 아이콘 박스 */
+        .icon-wrapper {
+            width: 72px;
+            height: 72px;
+            background: #f0fdf4;
+            border-radius: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            font-size: 36px;
+            border: 1px solid rgba(16, 185, 129, 0.1);
+        }
+
+        h3 { 
+            margin: 0 0 12px 0; 
+            font-size: 24px; 
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            color: #111827;
+        }
+
+        p#sub-message { 
+            color: var(--text-sub); 
+            font-size: 15px; 
+            line-height: 1.6; 
+            margin-bottom: 36px; 
+            word-break: keep-all;
+        }
+        
+        /* 공통 버튼 스타일 */
+        .btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 16px 0;
+            margin-bottom: 12px;
+            font-size: 16px;
+            font-weight: 700;
+            text-decoration: none;
+            border-radius: 16px;
+            transition: all 0.2s ease;
+            border: none;
+            cursor: pointer;
+            box-sizing: border-box;
+        }
+        
+        .btn:active { transform: scale(0.97); }
+
+        /* 메인 액션: 앱으로 이동 */
+        .btn-primary { 
+            background: var(--green); 
+            color: white; 
+            box-shadow: 0 8px 20px rgba(16, 185, 129, 0.2);
+        }
+        .btn-primary:hover { 
+            transform: translateY(-2px);
+            box-shadow: 0 10px 24px rgba(16, 185, 129, 0.3);
+        }
+
+        /* 서브 액션: 웹 버전 */
+        .btn-web { 
+            background: white; 
+            color: var(--text-sub); 
+            border: 1px solid var(--line);
+        }
+        .btn-web:hover {
+            background: #f8fafc;
+            border-color: rgba(0,0,0,0.15);
+        }
+
+        /* 보조 링크: 설치하기 */
+        .btn-install { 
+            background: transparent; 
+            color: #64748b; 
+            font-size: 14px;
+            font-weight: 600;
+            margin-top: 8px;
+            text-decoration: underline;
+            text-underline-offset: 4px;
+            padding: 10px 0;
+        }
+        .btn-install:hover { color: var(--text-main); }
+
+        /* 하단 안내 문구 */
+        .footer-note { 
+            margin-top: 32px; 
+            font-size: 12px; 
+            color: #94a3b8; 
+            line-height: 1.5;
+            word-break: keep-all;
+        }
+
+        button, a { -webkit-tap-highlight-color: transparent; }
+    </style>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getRemoteConfig, fetchAndActivate, getString } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-remote-config.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBzuI8NJ03uRTy5OOF7QycZXcnqSAcUwwA",
+            authDomain: "mahjongs-e07d3.firebaseapp.com",
+            projectId: "mahjongs-e07d3",
+            storageBucket: "mahjongs-e07d3.firebasestorage.app",
+            messagingSenderId: "727926338004",
+            appId: "1:727926338004:web:d140565ae1e58ea2eea641",
+            measurementId: "G-Z2WZBEJS87"
+        };
+
+        window.installUrl = "https://play.google.com/store/apps/details?id=ggack.mahjongsheet";
+    </script>
+
+    <script>
+        window.installUrl = "https://play.google.com/store/apps/details?id=ggack.mahjongsheet";
+        let intentUrl = "";
+
+        const i18n = {
+            ko: {
+                title: "마작 기록장",
+                sub1: "공유받은 기록을 확인하기 위해<br>아래 버튼을 선택해 주세요.",
+                btnOpen: "마작 기록장 앱으로 이동",
+                btnInstall: "앱이 없으신가요? 설치하기",
+                btnWeb: "웹 버전으로 입력하기 (설치없이 이용)",
+                footer: "인앱 브라우저(카톡 등)에서 연결이 안 될 경우<br>링크 복사 후 외부 브라우저(크롬, 사파리) 에서 시도해 주세요."
+            },
+            en: {
+                title: "Mahjong Sheet",
+                sub1: "To check shared records,<br>please select a button below.",
+                btnOpen: "Open in App",
+                btnInstall: "Install App",
+                btnWeb: "Use Light Web Version (No Install)",
+                footer: "If the link doesn't work in in-app browsers(Kakao, etc),<br>please copy the link and open it in an external browser (Chrome, Safari)."
+            },
+            ja: {
+                title: "麻雀記録帳",
+                sub1: "共有された記録を確認するには、<br>下のボタンを選択してください。",
+                btnOpen: "アプリで開く",
+                btnInstall: "アプリをインストール",
+                btnWeb: "ウェブ版で入力 (インストール不要)",
+                footer: "アプリ内ブラウザ（LINE等）で開けない場合は、<br>링크를 복사해서 외부 브라우저(Chrome, Safari)에서実行해 주세요."
+            },
+            zh: {
+                title: "麻将记录本",
+                sub1: "为了查看共享记录，<br>请选择下方按钮。",
+                btnOpen: "在应用中打开",
+                btnInstall: "安装应用",
+                btnWeb: "使用网页版 (无需安装)",
+                footer: "如果在应用内浏览器（微信等）中无法连接，<br>请复制链接并在外部浏览器（Chrome，Safari）中尝试。"
+            }
+        };
+
+        function applyLanguage(lang) {
+            const data = i18n[lang] || i18n['en'];
+            document.getElementById("message").innerHTML = data.title;
+            document.getElementById("sub-message").innerHTML = data.sub1;
+            document.getElementById("btn-open").innerHTML = data.btnOpen;
+            document.getElementById("btn-install-text").innerHTML = data.btnInstall;
+            document.getElementById("btn-web").innerHTML = data.btnWeb;
+            document.getElementById("footer-text").innerHTML = data.footer;
+            document.documentElement.lang = lang;
+        }
+
+        window.onload = function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const sheetId = urlParams.get('id');
+            
+            let lang = navigator.language.split('-')[0];
+            applyLanguage(lang);
+
+            if (sheetId) {
+                intentUrl = "intent://sheet/d/" + sheetId + "#Intent;scheme=mahjong;package=ggack.mahjongsheet;end;";
+            } else {
+                document.getElementById("btn-open").style.display = "none";
+                document.getElementById("btn-web").style.display = "none";
+                document.getElementById("sub-message").style.display = "none";
+            }
+        };
+
+        function openApp() { if (intentUrl) window.location.href = intentUrl; }
+        function installApp() { window.location.href = window.installUrl; }
+        function openWebVersion() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const sheetId = urlParams.get('id');
+            const targetUrl = "https://mahjongsheet.kr/?id=" + (sheetId || "");
+            const userAgent = navigator.userAgent.toLowerCase();
+            
+            if (userAgent.includes('kakaotalk')) {
+                location.href = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(targetUrl);
+                return;
+            }
+            if (userAgent.includes('android')) {
+                location.href = 'intent://' + targetUrl.replace(/https?:\/\//i, '') + '#Intent;scheme=https;package=com.android.chrome;end';
+                return;
+            }
+            window.location.href = targetUrl;
+        }
+    </script>
+</head>
+<body>
+
+    <div class="container">
+        <div class="icon-wrapper">🀄</div>
+        <h3 id="message">마작 기록장</h3>
+        <p id="sub-message"></p>
+
+        <button id="btn-open" onclick="openApp()" class="btn btn-primary"></button>
+        <button id="btn-web" onclick="openWebVersion()" class="btn btn-web"></button>
+
+        <button onclick="installApp()" class="btn btn-install">
+            <span id="btn-install-text"></span>
+        </button>
+        
+        <p class="footer-note" id="footer-text"></p>
+    </div>
+
+</body>
+</html>
