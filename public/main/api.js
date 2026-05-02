@@ -59,6 +59,17 @@ function requireWritePermission() {
     }
 }
 
+export function getCurrentUserId() {
+    if (authMode === "guest") return null;
+
+    const user = auth.currentUser;
+    if (!user) return null;
+
+    return (user.email || user.uid || "")
+        .trim()
+        .toLowerCase() || null;
+}
+
 function getCurrentYearMonth(date = new Date()) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
@@ -137,6 +148,8 @@ function normalizeRecordDoc(raw, docId = null) {
         updatedAtMillis: Number(raw.updatedAtMillis ?? modifiedTime ?? uploadTime),
         deleted,
         status: deleted ? "DELETED" : (raw.status || "SUCCESS"),
+        writer: raw.writer ?? null,
+        editor: raw.editor ?? null,
         updateTimeStr: raw.updateTimeStr || (modifiedTime ? formatMillisToSheetString(modifiedTime) : "")
     };
 }
@@ -255,7 +268,7 @@ function toListRows(records, requestedRange) {
         "UUID", "No", "UploadTime", "GameType", "GameLength",
         "P1Name", "P1Score", "P2Name", "P2Score",
         "P3Name", "P3Score", "P4Name", "P4Score",
-        "Deposit", "Status", "UpdateTime"
+        "Deposit", "Status", "UpdateTime", "Writer", "Editor"
     ];
 
     const fullRows = records.map((r) => [
@@ -274,7 +287,9 @@ function toListRows(records, requestedRange) {
         r.p4Score ?? 0,
         r.deposit ?? 0,
         normalizeStatusForCell(r.status),
-        r.updateTimeStr || (r.modifiedTime ? formatMillisToSheetString(r.modifiedTime) : "")
+        r.updateTimeStr || (r.modifiedTime ? formatMillisToSheetString(r.modifiedTime) : ""),
+        r.writer || "",
+        r.editor || ""
     ]);
 
     if (requestedRange === "list!A:A") {
@@ -286,6 +301,10 @@ function toListRows(records, requestedRange) {
     }
 
     if (requestedRange === "list!A:P") {
+        return { values: [header.slice(0, 16), ...fullRows.map(row => row.slice(0, 16))] };
+    }
+
+    if (requestedRange === "list!A:R") {
         return { values: [header, ...fullRows] };
     }
 
@@ -336,7 +355,9 @@ function rowDataToRecord(rowData) {
         deposit: parseInt(rowData[13]) || 0,
         status: rowData[14] === "DELETED" ? "DELETED" : "SUCCESS",
         updateTimeStr,
-        modifiedTime: updateTimeStr ? parseTimeToMillis(updateTimeStr) : null
+        modifiedTime: updateTimeStr ? parseTimeToMillis(updateTimeStr) : null,
+        writer: rowData[16] || null,
+        editor: rowData[17] || null
     });
 }
 
@@ -348,6 +369,7 @@ async function findRecordByUuidInCurrentMonth(uuid, yearMonth = getCurrentYearMo
 async function upsertRecordAndMeta(record, isNewInsert = false) {
     requireSheetId();
 
+    const currentUserId = getCurrentUserId();
     const now = Date.now();
     const yearMonth = record.yearMonth || parseYearMonth(record.uploadTimeStr);
 
@@ -398,11 +420,16 @@ async function upsertRecordAndMeta(record, isNewInsert = false) {
             currentSheet.memberNames || [],
             extractNicknamesFromRecord(normalized)
         );
-        tx.set(recordRef, {
+        const existingRecord = recordSnap.exists() ? recordSnap.data() : null;
+        const recordToSave = {
             ...normalized,
             sheetId,
-            deleted: normalized.status === "DELETED"
-        });
+            deleted: normalized.status === "DELETED",
+            writer: existingRecord?.writer || normalized.writer || currentUserId || null,
+            editor: currentUserId || normalized.editor || existingRecord?.editor || null
+        };
+
+        tx.set(recordRef, recordToSave);
 
         tx.set(monthRef, {
             ym: yearMonth,
@@ -440,7 +467,7 @@ export async function fetchSheet(range) {
         return { values: [[String(settings?.lastNo ?? 0)]] };
     }
 
-    if (range === "list!A:A" || range === "list!A:O" || range === "list!A:P") {
+    if (range === "list!A:A" || range === "list!A:O" || range === "list!A:P" || range === "list!A:R") {
         const currentMonth = getCurrentYearMonth();
         const records = await fetchMonthRecordsFull(currentMonth);
         return toListRows(records, range);
@@ -455,7 +482,7 @@ export async function callSheetsAPI(range, method = 'GET', body = null) {
 
     const currentMonth = getCurrentYearMonth();
 
-    if (method === "APPEND" && range === "list!A:P") {
+    if (method === "APPEND" && (range === "list!A:P" || range === "list!A:R")) {
         const rowData = body?.values?.[0];
         if (!rowData) throw new Error("APPEND body가 비어 있습니다.");
 
@@ -488,7 +515,7 @@ export async function callSheetsAPI(range, method = 'GET', body = null) {
         return { updates: { updatedRange: range } };
     }
 
-    const fullRowMatch = range.match(/^list!A(\d+):P\1$/);
+    const fullRowMatch = range.match(/^list!A(\d+):(P|R)\1$/);
     if (method === "PUT" && fullRowMatch) {
         const rowData = body?.values?.[0];
         if (!rowData) throw new Error("PUT body가 비어 있습니다.");
@@ -519,14 +546,21 @@ export async function callSheetsAPI(range, method = 'GET', body = null) {
         const now = Date.now();
         const isDeleted = body?.values?.[0]?.[0] === "DELETED";
 
-        await updateDoc(getRecordRef(targetRecord.yearMonth, targetRecord.uuid), {
+        const currentUserId = getCurrentUserId();
+        const updates = {
             sheetId,
             status: isDeleted ? "DELETED" : "SUCCESS",
             deleted: isDeleted,
             modifiedTime: now,
             updatedAtMillis: now,
             updateTimeStr: formatMillisToSheetString(now)
-        });
+        };
+
+        if (currentUserId) {
+            updates.editor = currentUserId;
+        }
+
+        await updateDoc(getRecordRef(targetRecord.yearMonth, targetRecord.uuid), updates);
 
         await setDoc(getMonthRef(targetRecord.yearMonth), {
             ym: targetRecord.yearMonth,

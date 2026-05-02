@@ -1,6 +1,6 @@
 // js/tab-input.js
 import { state, updateGameSettings } from './store.js';
-import { callSheetsAPI, fetchSheet, fetchSheetNicknames } from './api.js';
+import { callSheetsAPI, fetchSheet, fetchSheetNicknames, getCurrentUserId } from './api.js';
 import { saveRecords, getAllRecords } from './db.js';
 import { t } from './translations.js';
 
@@ -364,6 +364,8 @@ async function handleSaveRecord() {
 
         const yearMonth = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
 
+        const currentUserId = getCurrentUserId();
+
         const finalUploadTime = editModeOriginalRecord ? editModeOriginalRecord.uploadTime : currentTime;
         const finalUploadTimeStr = editModeOriginalRecord
             ? (editModeOriginalRecord.uploadTimeStr || editModeOriginalRecord.date)
@@ -391,14 +393,17 @@ async function handleSaveRecord() {
             deposit,
             status: editModeOriginalRecord?.status === "DELETED" ? "DELETED" : (editModeOriginalRecord?.status || "SUCCESS"),
             updatedAtMillis: currentTime,
-            modifiedTime: editModeUuid ? currentTime : null
+            modifiedTime: editModeUuid ? currentTime : null,
+            writer: editModeOriginalRecord?.writer || currentUserId || null,
+            editor: currentUserId || editModeOriginalRecord?.editor || null
         };
 
         const rowData = [
             record.uuid, record.seqNo, finalUploadTimeStr, record.gameType, record.gameLength,
             record.p1Name, record.p1Score, record.p2Name, record.p2Score,
             record.p3Name, record.p3Score, record.p4Name, record.p4Score,
-            record.deposit, record.status === "DELETED" ? "DELETED" : "", record.updateTimeStr
+            record.deposit, record.status === "DELETED" ? "DELETED" : "", record.updateTimeStr,
+            record.writer || "", record.editor || ""
         ];
 
         if (editModeUuid) {
@@ -417,9 +422,9 @@ async function handleSaveRecord() {
                 throw new Error("수정 대상 행을 찾을 수 없습니다.");
             }
 
-            await callSheetsAPI(`list!A${targetRow}:P${targetRow}`, "PUT", { values: [rowData] });
+            await callSheetsAPI(`list!A${targetRow}:R${targetRow}`, "PUT", { values: [rowData] });
         } else {
-            await callSheetsAPI("list!A:P", "APPEND", { values: [rowData] });
+            await callSheetsAPI("list!A:R", "APPEND", { values: [rowData] });
             await callSheetsAPI("setting!B1", "PUT", { values: [[targetSeqNo]] });
             updateGameSettings({ lastNo: targetSeqNo });
         }

@@ -135,7 +135,7 @@ export async function getAllRecords() {
     return getRecordsBySheetMonth(sheetId, getCurrentYearMonth());
 }
 
-export async function updateRecordStatus(uuid, newStatus) {
+export async function updateRecordStatus(uuid, newStatus, editor = null) {
     const db = await openDB();
     return new Promise((resolve, reject) => {
         const transaction = db.transaction([RECORD_STORE], 'readwrite');
@@ -154,6 +154,9 @@ export async function updateRecordStatus(uuid, newStatus) {
             data.isDeleted = isDeleted;
             data.deleted = isDeleted;
             data.updatedAtMillis = Date.now();
+            if (editor) {
+                data.editor = editor;
+            }
 
             const updateReq = store.put(data);
             updateReq.onsuccess = () => resolve(true);

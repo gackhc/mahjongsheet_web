@@ -1,7 +1,7 @@
 // js/tab-list.js
 import { getAllRecords, updateRecordStatus } from './db.js';
 import { loadRecordForEdit } from './tab-input.js';
-import { fetchSheet, callSheetsAPI } from './api.js';
+import { fetchSheet, callSheetsAPI, getCurrentUserId } from './api.js';
 import { t } from './translations.js';
 
 let allRecords = [];
@@ -178,10 +178,12 @@ function bindEvents() {
             } else if (btn.classList.contains('btn-delete')) {
                 if (confirm(t('confirm_delete'))) {
                     try {
-                        await updateRecordStatus(uuid, "DELETED");
+                        const currentUserId = getCurrentUserId();
+                        await updateRecordStatus(uuid, "DELETED", currentUserId);
                         await syncStatusToSheet(uuid, "DELETED");
                         targetRecord.status = "DELETED";
                         targetRecord.raw.status = "DELETED";
+                        targetRecord.raw.editor = currentUserId || targetRecord.raw.editor || null;
                         renderHistory();
                     } catch (error) {
                         alert(error.message);
@@ -189,10 +191,12 @@ function bindEvents() {
                 }
             } else if (btn.classList.contains('btn-restore')) {
                 try {
-                    await updateRecordStatus(uuid, "SUCCESS");
+                    const currentUserId = getCurrentUserId();
+                    await updateRecordStatus(uuid, "SUCCESS", currentUserId);
                     await syncStatusToSheet(uuid, "");
                     targetRecord.status = "SUCCESS";
                     targetRecord.raw.status = "SUCCESS";
+                    targetRecord.raw.editor = currentUserId || targetRecord.raw.editor || null;
                     renderHistory();
                 } catch (error) {
                     alert(error.message);
