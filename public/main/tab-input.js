@@ -1,6 +1,6 @@
 // js/tab-input.js
 import { state, updateGameSettings } from './store.js';
-import { callSheetsAPI, fetchSheet, fetchSheetNicknames, getCurrentUserId } from './api.js';
+import { callSheetsAPI, fetchSheet, fetchSheetNicknames, getCurrentUserId, fetchRecentNicknames, pushRecentNicknamesToFirestore } from './api.js';
 import { saveRecords, getAllRecords } from './db.js';
 import { t } from './translations.js';
 
@@ -12,43 +12,33 @@ let selectedPlayerIndex = 0;
 let cachedAllNicknames = [];
 let cachedRecentNicknames = [];
 
-function getRecentNickKey() {
-    const currentSheetId = sessionStorage.getItem('currentSheetId') || 'default';
-    return `recent_nicks_${currentSheetId}`;
-}
 
-function loadRecentNicknames() {
+async function loadRecentNicknames() {
     try {
-        const raw = localStorage.getItem(getRecentNickKey());
-        if (!raw) return [];
-        const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed)) return [];
-        return parsed
-            .map(v => (v || "").trim())
-            .filter(Boolean)
-            .slice(0, 12);
-    } catch {
+        return await fetchRecentNicknames();
+    } catch (error) {
+        console.warn("최근 닉네임 Firestore 조회 실패:", error);
         return [];
     }
 }
 
-function saveRecentNicknames(names) {
-    localStorage.setItem(getRecentNickKey(), JSON.stringify(names.slice(0, 12)));
-}
-
-function pushRecentNicknames(names) {
+async function pushRecentNicknames(names) {
     const clean = names
         .map(v => (v || "").trim())
         .filter(Boolean);
 
-    const merged = [
-        ...clean,
-        ...loadRecentNicknames()
-    ];
+    try {
+        cachedRecentNicknames = await pushRecentNicknamesToFirestore(clean);
+    } catch (error) {
+        console.warn("최근 닉네임 Firestore 저장 실패:", error);
+        const newSet = new Set(clean);
+        cachedRecentNicknames = [
+            ...clean,
+            ...cachedRecentNicknames.filter(name => !newSet.has(name))
+        ].slice(0, 12);
+    }
 
-    const unique = Array.from(new Set(merged)).slice(0, 12);
-    saveRecentNicknames(unique);
-    cachedRecentNicknames = unique;
+    return cachedRecentNicknames;
 }
 
 function getVisiblePlayerCount() {
@@ -154,7 +144,7 @@ export async function initInputTab() {
         ...localNames
     ])).sort((a, b) => a.localeCompare(b));
 
-    cachedRecentNicknames = loadRecentNicknames();
+    cachedRecentNicknames = await loadRecentNicknames();
 
     renderPlayerInputs(cachedRecentNicknames);
     setupEvents();
@@ -197,7 +187,7 @@ function renderPlayerInputs(recentNicknames = []) {
         playerList.innerHTML = '';
 
         for (let i = 0; i < 4; i++) {
-            const scoreTabIndex = i + 5;
+            const scoreTabIndex = i + 2;
 
             playerList.innerHTML += `
                 <div class="player-row" id="row-player-${i}">
@@ -231,7 +221,8 @@ function renderPlayerInputs(recentNicknames = []) {
                     </div>
 
                     <div class="input-box-wrapper error" id="score-wrapper-${i}">
-                        <input type="number" class="p-score" placeholder="${t('score')}" id="score-${i}" tabindex="${scoreTabIndex}">
+                        <button type="button" class="score-sign-toggle score-sign-plus" data-index="${i}" data-sign="1" tabindex="-1" aria-label="점수 부호">+</button>
+                        <input type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="${i === 3 ? 'done' : 'next'}" class="p-score" placeholder="${t('score')}" id="score-${i}" tabindex="${scoreTabIndex}">
                         <span class="input-suffix">00</span>
                     </div>
                 </div>
@@ -260,7 +251,11 @@ function renderPlayerInputs(recentNicknames = []) {
 
         const depositInput = document.getElementById('deposit');
         if (depositInput) {
-            depositInput.setAttribute('tabindex', '9');
+            depositInput.setAttribute('tabindex', '1');
+            depositInput.setAttribute('type', 'tel');
+            depositInput.setAttribute('inputmode', 'numeric');
+            depositInput.setAttribute('pattern', '[0-9]*');
+            depositInput.setAttribute('enterkeyhint', 'next');
             depositInput.placeholder = t('deposit');
         }
 
@@ -292,6 +287,7 @@ function setupEvents() {
     if (viewInput && !viewInput.dataset.bound) {
         viewInput.addEventListener('input', (e) => {
             if (e.target.classList.contains('p-score') || e.target.id === 'deposit') {
+                sanitizeNumberInput(e.target);
                 const wrapper = e.target.closest('.input-box-wrapper');
                 if (wrapper) {
                     const isFilled = e.target.value.trim() !== '';
@@ -304,6 +300,12 @@ function setupEvents() {
         });
 
         viewInput.addEventListener('click', (e) => {
+            const signBtn = e.target.closest('.score-sign-toggle');
+            if (signBtn) {
+                toggleScoreSign(Number(signBtn.dataset.index));
+                return;
+            }
+
             const slot = e.target.closest('.name-slot-box');
             if (slot) {
                 const index = Number(slot.dataset.index);
@@ -335,6 +337,13 @@ function setupEvents() {
                 swapPlayerNames(index, targetIndex);
                 setSelectedPlayer(targetIndex);
                 return;
+            }
+        });
+
+        viewInput.addEventListener('keydown', (e) => {
+            if ((e.target.classList.contains('p-score') || e.target.id === 'deposit') && e.key === 'Enter') {
+                e.preventDefault();
+                focusNextInputFrom(e.target.id);
             }
         });
 
@@ -396,6 +405,57 @@ export function applySettingsToUI() {
     updateScoreBoard();
 }
 
+
+function getScoreSign(index) {
+    const btn = document.querySelector(`.score-sign-toggle[data-index="${index}"]`);
+    return btn?.dataset.sign === "-1" ? -1 : 1;
+}
+
+function setScoreSign(index, sign) {
+    const btn = document.querySelector(`.score-sign-toggle[data-index="${index}"]`);
+    if (!btn) return;
+
+    const normalized = Number(sign) < 0 ? -1 : 1;
+    btn.dataset.sign = String(normalized);
+    btn.textContent = normalized < 0 ? "−" : "+";
+    btn.classList.toggle("score-sign-minus", normalized < 0);
+    btn.classList.toggle("score-sign-plus", normalized > 0);
+}
+
+function toggleScoreSign(index) {
+    setScoreSign(index, getScoreSign(index) * -1);
+    updateScoreBoard();
+}
+
+function getScoreInputRaw(index) {
+    const input = document.getElementById(`score-${index}`);
+    return String(input?.value || "").replace(/[^0-9]/g, "");
+}
+
+function getScoreInputValue(index) {
+    const raw = getScoreInputRaw(index);
+    if (!raw) return 0;
+    return (parseInt(raw, 10) || 0) * getScoreSign(index);
+}
+
+function sanitizeNumberInput(input) {
+    if (!input) return;
+    const cleaned = String(input.value || "").replace(/[^0-9]/g, "");
+    if (input.value !== cleaned) input.value = cleaned;
+}
+
+function focusNextInputFrom(currentId) {
+    const order = ["deposit", "score-0", "score-1", "score-2", "score-3"];
+    const idx = order.indexOf(currentId);
+    if (idx >= 0 && idx < order.length - 1) {
+        const next = document.getElementById(order[idx + 1]);
+        next?.focus();
+        next?.select?.();
+    } else if (idx === order.length - 1) {
+        document.getElementById(currentId)?.blur();
+    }
+}
+
 function updateScoreBoard() {
     const scoreInputs = document.querySelectorAll('.p-score');
     const depositInput = document.getElementById('deposit');
@@ -407,7 +467,7 @@ function updateScoreBoard() {
     const playerCount = getVisiblePlayerCount();
 
     for (let i = 0; i < playerCount; i++) {
-        sum += (parseInt(scoreInputs[i].value) || 0) * 100;
+        sum += getScoreInputValue(i) * 100;
     }
 
     const total = sum;
@@ -526,13 +586,13 @@ async function handleSaveRecord() {
             gameType: state.gameSettings.gameType,
             gameLength,
             p1Name: getPlayerNameValue(0),
-            p1Score: parseInt(scoreInputs[0].value) * 100,
+            p1Score: getScoreInputValue(0) * 100,
             p2Name: getPlayerNameValue(1),
-            p2Score: parseInt(scoreInputs[1].value) * 100,
+            p2Score: getScoreInputValue(1) * 100,
             p3Name: getPlayerNameValue(2),
-            p3Score: parseInt(scoreInputs[2].value) * 100,
+            p3Score: getScoreInputValue(2) * 100,
             p4Name: state.gameSettings.gameType === 4 ? getPlayerNameValue(3) : "",
-            p4Score: state.gameSettings.gameType === 4 ? parseInt(scoreInputs[3].value) * 100 : 0,
+            p4Score: state.gameSettings.gameType === 4 ? getScoreInputValue(3) * 100 : 0,
             deposit,
             status: editModeOriginalRecord?.status === "DELETED" ? "DELETED" : (editModeOriginalRecord?.status || "SUCCESS"),
             updatedAtMillis: currentTime,
@@ -582,7 +642,7 @@ async function handleSaveRecord() {
             record.p4Name
         ].map(v => (v || '').trim()).filter(Boolean);
 
-        pushRecentNicknames(usedNames);
+        await pushRecentNicknames(usedNames);
         renderRecentNicknameChips(cachedRecentNicknames);
 
         clearInputs();
@@ -608,7 +668,7 @@ function clearInputs() {
         }
     }
 
-    document.querySelectorAll('.p-score').forEach(input => {
+    document.querySelectorAll('.p-score').forEach((input, idx) => {
         input.value = '';
         const wrapper = input.closest('.input-box-wrapper');
         if (wrapper) {
@@ -619,6 +679,7 @@ function clearInputs() {
 
     for (let i = 0; i < 4; i++) {
         setPlayerNameValue(i, '');
+        setScoreSign(i, 1);
     }
 
     setSelectedPlayer(0);
@@ -704,7 +765,9 @@ export function loadRecordForEdit(record) {
 
         const scoreInput = document.getElementById(`score-${i}`);
         if (scoreInput && p.score !== undefined && p.score !== "") {
-            scoreInput.value = p.score === 0 ? 0 : p.score / 100;
+            const numericScore = Number(p.score || 0);
+            scoreInput.value = Math.abs(numericScore / 100);
+            setScoreSign(i, numericScore < 0 ? -1 : 1);
             const wrapper = scoreInput.closest('.input-box-wrapper');
             wrapper?.classList.add('filled');
             wrapper?.classList.remove('error');
@@ -800,93 +863,157 @@ function applyNicknameToPlayer(index, name, options = {}) {
     }
 }
 
+
+const HANGUL_BASE = 0xAC00;
+const HANGUL_LAST = 0xD7A3;
+const CHOSUNG_LIST = ["ㄱ", "ㄲ", "ㄴ", "ㄷ", "ㄸ", "ㄹ", "ㅁ", "ㅂ", "ㅃ", "ㅅ", "ㅆ", "ㅇ", "ㅈ", "ㅉ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ"];
+let nicknameDialogHistoryOpen = false;
+
+function escapeHtml(value) {
+    return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+function getChosungText(text) {
+    return String(text || "").split("").map((char) => {
+        const code = char.charCodeAt(0);
+        if (code >= HANGUL_BASE && code <= HANGUL_LAST) {
+            const index = Math.floor((code - HANGUL_BASE) / 588);
+            return CHOSUNG_LIST[index] || char;
+        }
+        return char;
+    }).join("");
+}
+
+function getNicknameMatchInfo(name, keyword) {
+    const cleanName = String(name || "").trim();
+    const cleanKeyword = String(keyword || "").trim();
+    if (!cleanKeyword) return { matched: true, index: 0, type: 2 };
+
+    const lowerName = cleanName.toLowerCase();
+    const lowerKeyword = cleanKeyword.toLowerCase();
+    const directIndex = lowerName.indexOf(lowerKeyword);
+
+    const nameChosung = getChosungText(cleanName).toLowerCase();
+    const keywordChosung = getChosungText(cleanKeyword).toLowerCase();
+    const chosungIndex = nameChosung.indexOf(keywordChosung);
+
+    if (directIndex < 0 && chosungIndex < 0) {
+        return { matched: false, index: Number.MAX_SAFE_INTEGER, type: 9 };
+    }
+
+    if (directIndex >= 0 && (chosungIndex < 0 || directIndex <= chosungIndex)) {
+        return { matched: true, index: directIndex, type: 0 };
+    }
+
+    return { matched: true, index: chosungIndex, type: 1 };
+}
+
+function getFilteredNicknames(keyword) {
+    const q = String(keyword || "").trim();
+
+    return cachedAllNicknames
+        .map((name) => ({ name, match: getNicknameMatchInfo(name, q) }))
+        .filter((item) => item.match.matched)
+        .sort((a, b) => {
+            if (a.match.index !== b.match.index) return a.match.index - b.match.index;
+            if (a.match.type !== b.match.type) return a.match.type - b.match.type;
+            return a.name.localeCompare(b.name);
+        })
+        .map((item) => item.name);
+}
+
+function pushNicknameDialogHistory() {
+    if (nicknameDialogHistoryOpen) return;
+    nicknameDialogHistoryOpen = true;
+    history.pushState({ nicknameDialogOpen: true }, "");
+}
+
+function closeNicknameDialog({ fromPopState = false } = {}) {
+    const root = document.getElementById('nickname-dialog-root');
+    if (!root || root.style.display === 'none') return;
+
+    root.style.display = 'none';
+    root.innerHTML = '';
+
+    if (nicknameDialogHistoryOpen) {
+        nicknameDialogHistoryOpen = false;
+        if (!fromPopState && history.state?.nicknameDialogOpen) {
+            history.back();
+        }
+    }
+}
+
+if (!window.__mahjongNicknameDialogPopBound) {
+    window.__mahjongNicknameDialogPopBound = true;
+    window.addEventListener('popstate', () => {
+        const root = document.getElementById('nickname-dialog-root');
+        if (root && root.style.display !== 'none') {
+            closeNicknameDialog({ fromPopState: true });
+        }
+    });
+}
+
+function focusNicknameInputSafely() {
+    const input = document.getElementById('nickname-search-input');
+    if (!input) return;
+
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                input.focus({ preventScroll: true });
+            }, 80);
+        });
+    });
+}
+
 function openNicknameDialog(targetIndex) {
     setSelectedPlayer(targetIndex);
 
     const root = document.getElementById('nickname-dialog-root');
     if (!root) return;
 
-    const rows = cachedAllNicknames
-        .map(name => `
-            <div class="nickname-item" data-name="${name}" style="
-                padding:12px;
-                border-bottom:1px solid #eee;
-                cursor:pointer;
-                font-size:15px;
-            ">${name}</div>
-        `)
-        .join('');
-
     root.innerHTML = `
-        <div id="nickname-dialog-overlay" style="
-            position:fixed;
-            inset:0;
-            background:rgba(0,0,0,0.45);
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            z-index:9999;
-        ">
-            <div style="
-                width:min(92vw, 420px);
-                max-height:80vh;
-                background:#fff;
-                border-radius:14px;
-                overflow:hidden;
-                display:flex;
-                flex-direction:column;
-            ">
-                <div style="padding:16px; font-size:18px; font-weight:bold;">
+        <div id="nickname-dialog-overlay" class="nickname-dialog-overlay">
+            <div class="nickname-dialog-panel">
+                <div class="nickname-dialog-title">
                     ${t('nickname')}
                 </div>
 
-                <div style="padding:0 16px 12px 16px; display:flex; gap:8px;">
+                <div class="nickname-dialog-search-row">
                     <input
                         id="nickname-search-input"
                         type="text"
+                        inputmode="text"
+                        autocomplete="off"
+                        autocorrect="off"
+                        autocapitalize="none"
+                        spellcheck="false"
+                        enterkeyhint="done"
                         placeholder="${t('nickname')}"
-                        style="
-                            flex:1;
-                            height:44px;
-                            border:1px solid #ddd;
-                            border-radius:8px;
-                            padding:0 12px;
-                            font-size:14px;
-                        "
+                        class="nickname-search-input"
                     />
                     <button
                         id="nickname-direct-btn"
                         type="button"
-                        style="
-                            height:44px;
-                            padding:0 14px;
-                            border:none;
-                            border-radius:8px;
-                            background:#2e7d32;
-                            color:#fff;
-                            font-weight:bold;
-                            cursor:pointer;
-                        "
+                        class="nickname-direct-btn"
+                        tabindex="-1"
                     >
                         ${t('direct_input_create')}
                     </button>
                 </div>
 
-                <div id="nickname-list" style="overflow:auto; max-height:50vh;">
-                    ${rows}
-                </div>
+                <div id="nickname-list" class="nickname-list"></div>
 
-                <div style="padding:12px 16px; border-top:1px solid #eee; text-align:right;">
+                <div class="nickname-dialog-footer">
                     <button
                         id="nickname-close-btn"
                         type="button"
-                        style="
-                            border:none;
-                            background:transparent;
-                            color:#666;
-                            cursor:pointer;
-                            font-size:14px;
-                        "
+                        class="nickname-close-btn"
                     >
                         ${t('cancel')}
                     </button>
@@ -896,65 +1023,98 @@ function openNicknameDialog(targetIndex) {
     `;
 
     root.style.display = 'block';
+    pushNicknameDialogHistory();
 
     const overlay = document.getElementById('nickname-dialog-overlay');
+    const panel = overlay?.querySelector('.nickname-dialog-panel');
     const list = document.getElementById('nickname-list');
     const searchInput = document.getElementById('nickname-search-input');
     const directBtn = document.getElementById('nickname-direct-btn');
     const closeBtn = document.getElementById('nickname-close-btn');
 
-    function closeDialog() {
-        root.style.display = 'none';
-        root.innerHTML = '';
-    }
+    if (!overlay || !panel || !list || !searchInput || !directBtn || !closeBtn) return;
+
+    searchInput.type = "text";
+    searchInput.inputMode = "text";
+    searchInput.autocomplete = "off";
+    searchInput.autocorrect = "off";
+    searchInput.autocapitalize = "none";
+    searchInput.spellcheck = false;
+    searchInput.enterKeyHint = "done";
+    searchInput.removeAttribute("readonly");
+    searchInput.removeAttribute("disabled");
+    searchInput.removeAttribute("tabindex");
 
     function renderFilteredList(keyword) {
-        const q = (keyword || '').trim().toLowerCase();
-        const filtered = cachedAllNicknames.filter(name => name.toLowerCase().includes(q));
+        const filtered = getFilteredNicknames(keyword);
 
         list.innerHTML = filtered.map(name => `
-            <div class="nickname-item" data-name="${name}" style="
-                padding:12px;
-                border-bottom:1px solid #eee;
-                cursor:pointer;
-                font-size:15px;
-            ">${name}</div>
+            <button type="button" class="nickname-item" data-name="${escapeHtml(name)}" tabindex="-1">
+                ${escapeHtml(name)}
+            </button>
         `).join('');
     }
 
-    overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) closeDialog();
-    });
-
-    closeBtn.addEventListener('click', closeDialog);
-
-    searchInput.addEventListener('input', (e) => {
-        renderFilteredList(e.target.value);
-    });
-
-    searchInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            const value = searchInput.value.trim();
-            if (!value) return;
-            applyNicknameToPlayer(targetIndex, value);
-            closeDialog();
-        }
-    });
-
-    directBtn.addEventListener('click', () => {
+    function applyDirectInput() {
         const value = searchInput.value.trim();
         if (!value) return;
         applyNicknameToPlayer(targetIndex, value);
-        closeDialog();
+        closeNicknameDialog();
+    }
+
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeNicknameDialog();
     });
+
+    panel.addEventListener('pointerdown', (event) => {
+        const target = event.target;
+        if (target.closest('button') || target.closest('.nickname-item')) return;
+        setTimeout(() => {
+            searchInput.focus({ preventScroll: true });
+        }, 0);
+    });
+
+    searchInput.addEventListener('pointerdown', () => {
+        setTimeout(() => {
+            searchInput.focus({ preventScroll: true });
+        }, 0);
+    });
+
+    closeBtn.addEventListener('click', () => closeNicknameDialog());
+
+    searchInput.addEventListener('input', () => {
+        renderFilteredList(searchInput.value);
+    });
+
+    searchInput.addEventListener('compositionstart', () => {
+        renderFilteredList(searchInput.value);
+    });
+
+    searchInput.addEventListener('compositionupdate', () => {
+        renderFilteredList(searchInput.value);
+    });
+
+    searchInput.addEventListener('compositionend', () => {
+        renderFilteredList(searchInput.value);
+    });
+
+    searchInput.addEventListener('keydown', (e) => {
+        if (e.isComposing || e.keyCode === 229) return;
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            applyDirectInput();
+        }
+    });
+
+    directBtn.addEventListener('click', applyDirectInput);
 
     list.addEventListener('click', (e) => {
         const item = e.target.closest('.nickname-item');
         if (!item) return;
         applyNicknameToPlayer(targetIndex, item.dataset.name || '');
-        closeDialog();
+        closeNicknameDialog();
     });
 
     renderFilteredList('');
-    searchInput.focus();
+    focusNicknameInputSafely();
 }

@@ -68,11 +68,11 @@
         </div>
 
         <div class="control-row">
-            <button id="round-south" class="segmented-btn active">남장</button>
-            <button id="round-east" class="segmented-btn">동장</button>
+            <button id="round-south" class="segmented-btn active" tabindex="-1">남장</button>
+            <button id="round-east" class="segmented-btn" tabindex="-1">동장</button>
             
             <div class="input-box-wrapper" id="deposit-wrapper">
-                <input type="number" id="deposit" placeholder="공탁금">
+                <input type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="next" id="deposit" placeholder="공탁금" tabindex="1">
                 <span class="input-suffix">00</span>
             </div>
         </div>

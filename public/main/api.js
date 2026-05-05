@@ -454,6 +454,75 @@ async function upsertRecordAndMeta(record, isNewInsert = false) {
     return normalized;
 }
 
+
+function getRecentNicknamesRef() {
+    requireSheetId();
+    return doc(db, "sheets", sheetId, "system", "recent_nicknames");
+}
+
+function normalizeRecentNicknames(names) {
+    if (!Array.isArray(names)) return [];
+    const result = [];
+    const seen = new Set();
+
+    names.forEach((name) => {
+        const clean = String(name || "").trim();
+        if (!clean || seen.has(clean)) return;
+        seen.add(clean);
+        result.push(clean);
+    });
+
+    return result.slice(0, 12);
+}
+
+export async function fetchRecentNicknames() {
+    requireSheetId();
+
+    try {
+        const snap = await getDoc(getRecentNicknamesRef());
+        if (!snap.exists()) return [];
+
+        const data = snap.data() || {};
+        return normalizeRecentNicknames(data.names || data.nicknames || []);
+    } catch (error) {
+        console.warn("최근 닉네임 조회 실패:", error);
+        return [];
+    }
+}
+
+export async function pushRecentNicknamesToFirestore(names) {
+    requireSheetId();
+    requireWritePermission();
+
+    const cleanNewNames = normalizeRecentNicknames(names);
+    if (cleanNewNames.length === 0) return await fetchRecentNicknames();
+
+    const recentRef = getRecentNicknamesRef();
+    let merged = [];
+
+    await runTransaction(db, async (tx) => {
+        const snap = await tx.get(recentRef);
+        const data = snap.exists() ? (snap.data() || {}) : {};
+        const current = normalizeRecentNicknames(data.names || data.nicknames || []);
+        const newSet = new Set(cleanNewNames);
+
+        merged = [
+            ...cleanNewNames,
+            ...current.filter(name => !newSet.has(name))
+        ].slice(0, 12);
+
+        tx.set(recentRef, {
+            names: merged,
+            nicknames: merged,
+            count: merged.length,
+            updatedAtMillis: Date.now(),
+            updatedAt: new Date().toISOString()
+        }, { merge: true });
+    });
+
+    return merged;
+}
+
 export async function fetchSheet(range) {
     requireSheetId();
 
