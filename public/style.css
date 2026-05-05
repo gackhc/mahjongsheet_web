@@ -47,20 +47,23 @@ body {
 
 /* 1. 점수 전광판 */
 .score-board {
-    background-color: var(--error-container); 
-    padding: 16px; border-radius: 12px;
-    display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 20px;
+    background-color: var(--error-container);
+    padding: 10px 14px;
+    border-radius: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
     transition: background-color 0.3s;
 }
 .score-board.valid { background-color: var(--success-container); }
-.score-board .info .target { font-size: 13px; font-weight: bold; color: var(--text-secondary); }
-.score-board .info .need { font-size: 12px; color: var(--error); margin-top: 4px; font-weight: bold;}
-.score-board .total-score { font-size: 32px; font-weight: 900; color: var(--error); }
-.score-board.valid .total-score, .score-board.valid .need { color: var(--success); }
-
+.score-board .info .target { font-size: 12px; font-weight: bold; color: var(--text-secondary); }
+.score-board .info .need { font-size: 11px; color: var(--error); margin-top: 2px; font-weight: bold; }
+.score-board .total-score { font-size: 26px; font-weight: 900; color: var(--error); }
+.score-board.valid .total-score,
+.score-board.valid .need { color: var(--success); }
 /* 2. 상단 버튼 & 공탁금 */
-.control-row { display: flex; gap: 8px; margin-bottom: 24px; }
+.control-row { display: flex; gap: 8px; margin-bottom: 10px; }
 .segmented-btn {
     flex: 1; height: 48px; border: 1px solid var(--outline);
     background: transparent; border-radius: 8px;
@@ -70,15 +73,144 @@ body {
 .segmented-btn.active { background-color: var(--primary-container); border-color: var(--primary); }
 
 /* 3. 플레이어 입력 (동남서북) */
-.player-list { display: flex; flex-direction: column; gap: 10px; }
-/* 플레이어 한 줄 레이아웃 */
-.player-row { 
-    display: flex; 
-    gap: 8px; 
-    align-items: center; 
-    width: 100%;
-    margin-bottom: 12px;
+.player-list {
+    display: flex;
+    flex-direction: column;
 }
+
+.player-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 5px;
+}
+
+
+.name-slot-box {
+    flex: 1;
+    min-width: 0;
+    height: 46px;
+    border: 1px solid #d9d9df;
+    border-radius: 10px;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    cursor: pointer;
+    transition: 0.18s ease;
+}
+
+.name-slot-box.filled {
+    border-color: var(--outline);
+}
+
+.name-slot-box.selected {
+    border-color: var(--primary);
+    background: var(--primary-container);
+    box-shadow: inset 0 0 0 1px rgba(103, 80, 164, 0.18);
+}
+
+.name-slot-box.disabled {
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+.name-slot-value {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.name-slot-value.placeholder {
+    color: #9aa0a6;
+    font-weight: 600;
+}
+
+.name-action-row {
+    display: flex;
+    flex-direction: row;
+    gap: 4px;
+    flex-shrink: 0;
+    align-items: center;
+    background: transparent;
+}
+
+.slot-action-btn {
+    height: 46px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 0 8px;
+}
+
+.slot-action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.slot-input-btn {
+    min-width: 54px;
+    background: var(--primary-container);
+    color: var(--on-primary-container);
+    border: 1px solid rgba(103, 80, 164, 0.35);
+}
+
+.recent-history-box {
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 8px;
+    background: #f7f7f9;
+    border: 1px solid #e5e5ea;
+}
+
+.recent-history-title {
+    font-size: 12px;
+    font-weight: bold;
+    color: #777;
+    margin-bottom: 8px;
+}
+
+.recent-history-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.recent-history-chip {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 999px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.move-up-btn,
+.move-down-btn {
+    width: 20px;
+    min-width: 20px;
+    height: 46px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-main);
+    font-size: 15px;
+    font-weight: 800;
+    box-shadow: none;
+}
+
+.left-action-row {
+    margin-right: 4px;
+}
+.right-action-row {
+    margin-left: 4px;
+}
+
 /* 1. 동남서북 라벨 (고정 크기) */
 .wind-label {
     width: 40px; 

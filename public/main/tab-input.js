@@ -7,7 +7,8 @@ import { t } from './translations.js';
 let editModeUuid = null;
 let editModeSeqNo = null;
 let editModeOriginalRecord = null;
-let currentNicknameTargetIndex = null;
+
+let selectedPlayerIndex = 0;
 let cachedAllNicknames = [];
 let cachedRecentNicknames = [];
 
@@ -50,6 +51,98 @@ function pushRecentNicknames(names) {
     cachedRecentNicknames = unique;
 }
 
+function getVisiblePlayerCount() {
+    return state.gameSettings.gameType === 3 ? 3 : 4;
+}
+
+function getWindText(index) {
+    const winds = [t('east'), t('south'), t('west'), t('north')];
+    return winds[index] || "";
+}
+
+function getBracketWindText(index) {
+    return `[${getWindText(index)}]`;
+}
+
+function getPrevVisibleIndex(index) {
+    const visible = getVisiblePlayerCount();
+    return (index - 1 + visible) % visible;
+}
+
+function getNextVisibleIndex(index) {
+    const visible = getVisiblePlayerCount();
+    return (index + 1) % visible;
+}
+
+function getPlayerNameValue(index) {
+    const input = document.getElementById(`name-${index}`);
+    return input ? input.value.trim() : "";
+}
+
+function setPlayerNameValue(index, name) {
+    const input = document.getElementById(`name-${index}`);
+    if (input) input.value = name;
+    syncNameSlotUI(index);
+}
+
+function syncNameSlotUI(index) {
+    const input = document.getElementById(`name-${index}`);
+    const valueEl = document.getElementById(`name-display-${index}`);
+    const slotEl = document.getElementById(`name-slot-${index}`);
+
+    if (!input || !valueEl || !slotEl) return;
+
+    const name = input.value.trim();
+    if (name) {
+        valueEl.textContent = `${getBracketWindText(index)} ${name}`;
+        valueEl.classList.remove('placeholder');
+        slotEl.classList.add('filled');
+    } else {
+        valueEl.textContent = `${getBracketWindText(index)} ${t('nickname')}`;
+        valueEl.classList.add('placeholder');
+        slotEl.classList.remove('filled');
+    }
+}
+
+function syncAllNameSlots() {
+    for (let i = 0; i < 4; i++) {
+        syncNameSlotUI(i);
+    }
+}
+
+function setSelectedPlayer(index) {
+    const visible = getVisiblePlayerCount();
+    selectedPlayerIndex = Math.max(0, Math.min(index, visible - 1));
+
+    for (let i = 0; i < 4; i++) {
+        const slotEl = document.getElementById(`name-slot-${i}`);
+        if (!slotEl) continue;
+        slotEl.classList.toggle('selected', i === selectedPlayerIndex && i < visible);
+    }
+}
+
+function advanceSelectedPlayer() {
+    setSelectedPlayer(getNextVisibleIndex(selectedPlayerIndex));
+}
+
+function addNicknameToCache(name) {
+    const clean = (name || "").trim();
+    if (!clean) return;
+
+    if (!cachedAllNicknames.includes(clean)) {
+        cachedAllNicknames = [...cachedAllNicknames, clean].sort((a, b) => a.localeCompare(b));
+    }
+}
+
+function swapPlayerNames(a, b) {
+    const aName = getPlayerNameValue(a);
+    const bName = getPlayerNameValue(b);
+
+    setPlayerNameValue(a, bName);
+    setPlayerNameValue(b, aName);
+    updateScoreBoard();
+}
+
 export async function initInputTab() {
     const [localNames, remoteNames] = await Promise.all([
         getUniqueNicknames(),
@@ -63,13 +156,17 @@ export async function initInputTab() {
 
     cachedRecentNicknames = loadRecentNicknames();
 
-    renderPlayerInputs(cachedAllNicknames, cachedRecentNicknames);
+    renderPlayerInputs(cachedRecentNicknames);
     setupEvents();
     applySettingsToUI();
+    setSelectedPlayer(0);
 
     if (sessionStorage.getItem('authMode') === 'guest') {
-        document.querySelectorAll('#view-input input, #view-input select, #view-input button').forEach(el => {
+        document.querySelectorAll('#view-input input, #view-input button').forEach(el => {
             el.disabled = true;
+        });
+        document.querySelectorAll('#view-input .name-slot-box').forEach(el => {
+            el.classList.add('disabled');
         });
     }
 }
@@ -93,30 +190,44 @@ async function getUniqueNicknames() {
     }
 }
 
-function renderPlayerInputs(nicknames, recentNicknames = []) {
-    const winds = [t('east'), t('south'), t('west'), t('north')];
+function renderPlayerInputs(recentNicknames = []) {
     const playerList = document.getElementById('player-inputs');
 
     if (playerList) {
         playerList.innerHTML = '';
 
-        winds.forEach((wind, i) => {
-            const nameTabIndex = i + 1;
+        for (let i = 0; i < 4; i++) {
             const scoreTabIndex = i + 5;
 
             playerList.innerHTML += `
                 <div class="player-row" id="row-player-${i}">
-                    <div class="wind-label">${wind}</div>
+                    <div class="name-action-row left-action-row">
+                        <button type="button" class="slot-action-btn slot-input-btn" data-index="${i}">
+                            ${t('input')}
+                        </button>
+                    </div>
 
-                    <div class="name-group" id="name-group-${i}">
+                    <div
+                        class="name-slot-box ${i === 0 ? 'selected' : ''}"
+                        id="name-slot-${i}"
+                        data-index="${i}"
+                    >
+                        <span class="name-slot-value placeholder" id="name-display-${i}">
+                            ${getBracketWindText(i)} ${t('nickname')}
+                        </span>
                         <input
                             type="text"
                             class="p-name-input"
-                            placeholder="${t('nickname')}"
                             id="name-${i}"
-                            tabindex="${nameTabIndex}"
                             readonly
+                            tabindex="-1"
+                            style="display:none;"
                         >
+                    </div>
+
+                    <div class="name-action-row right-action-row">
+                        <button type="button" class="slot-action-btn move-up-btn" data-index="${i}">▲</button>
+                        <button type="button" class="slot-action-btn move-down-btn" data-index="${i}">▼</button>
                     </div>
 
                     <div class="input-box-wrapper error" id="score-wrapper-${i}">
@@ -125,27 +236,18 @@ function renderPlayerInputs(nicknames, recentNicknames = []) {
                     </div>
                 </div>
             `;
-        });
+        }
 
         if (!document.getElementById('recent-nicknames-box')) {
             playerList.insertAdjacentHTML('beforeend', `
-                <div id="recent-nicknames-box" style="
-                    margin-top:10px;
-                    padding:10px;
-                    border-radius:8px;
-                    background:#f7f7f9;
-                    border:1px solid #e5e5ea;
-                ">
-                    <div style="font-size:12px; font-weight:bold; color:#777; margin-bottom:8px;">
-                        ${t('nickname')}
-                    </div>
-                    <div id="recent-nickname-chips" style="
-                        display:flex;
-                        flex-wrap:wrap;
-                        gap:8px;
-                    "></div>
+                <div id="recent-nicknames-box" class="recent-history-box">
+                    <div class="recent-history-title">${t('input_history')}</div>
+                    <div id="recent-nickname-chips" class="recent-history-chips"></div>
                 </div>
             `);
+        } else {
+            const title = document.querySelector('#recent-nicknames-box .recent-history-title');
+            if (title) title.textContent = t('input_history');
         }
 
         if (!document.getElementById('nickname-dialog-root')) {
@@ -161,6 +263,8 @@ function renderPlayerInputs(nicknames, recentNicknames = []) {
             depositInput.setAttribute('tabindex', '9');
             depositInput.placeholder = t('deposit');
         }
+
+        syncAllNameSlots();
     }
 }
 
@@ -168,32 +272,74 @@ function setupEvents() {
     const btnSouth = document.getElementById('round-south');
     const btnEast = document.getElementById('round-east');
 
-    btnSouth?.addEventListener('click', () => {
-        btnSouth.classList.add('active');
-        btnEast.classList.remove('active');
-    });
+    if (btnSouth && !btnSouth.dataset.bound) {
+        btnSouth.addEventListener('click', () => {
+            btnSouth.classList.add('active');
+            btnEast?.classList.remove('active');
+        });
+        btnSouth.dataset.bound = 'true';
+    }
 
-    btnEast?.addEventListener('click', () => {
-        btnEast.classList.add('active');
-        btnSouth.classList.remove('active');
-    });
+    if (btnEast && !btnEast.dataset.bound) {
+        btnEast.addEventListener('click', () => {
+            btnEast.classList.add('active');
+            btnSouth?.classList.remove('active');
+        });
+        btnEast.dataset.bound = 'true';
+    }
 
-    document.getElementById('view-input')?.addEventListener('input', (e) => {
-
-        if (e.target.classList.contains('p-score') || e.target.id === 'deposit') {
-            const wrapper = e.target.closest('.input-box-wrapper');
-            if (wrapper) {
-                const isFilled = e.target.value.trim() !== '';
-                wrapper.classList.toggle('filled', isFilled);
-                wrapper.classList.toggle('error', !isFilled);
+    const viewInput = document.getElementById('view-input');
+    if (viewInput && !viewInput.dataset.bound) {
+        viewInput.addEventListener('input', (e) => {
+            if (e.target.classList.contains('p-score') || e.target.id === 'deposit') {
+                const wrapper = e.target.closest('.input-box-wrapper');
+                if (wrapper) {
+                    const isFilled = e.target.value.trim() !== '';
+                    wrapper.classList.toggle('filled', isFilled);
+                    wrapper.classList.toggle('error', !isFilled);
+                }
             }
-        }
 
-        updateScoreBoard();
-    });
+            updateScoreBoard();
+        });
 
-    document.getElementById('view-input')?.addEventListener('change', (e) => {
-    });
+        viewInput.addEventListener('click', (e) => {
+            const slot = e.target.closest('.name-slot-box');
+            if (slot) {
+                const index = Number(slot.dataset.index);
+                setSelectedPlayer(index);
+                return;
+            }
+
+            const inputBtn = e.target.closest('.slot-input-btn');
+            if (inputBtn) {
+                const index = Number(inputBtn.dataset.index);
+                setSelectedPlayer(index);
+                openNicknameDialog(index);
+                return;
+            }
+
+            const moveUpBtn = e.target.closest('.move-up-btn');
+            if (moveUpBtn) {
+                const index = Number(moveUpBtn.dataset.index);
+                const targetIndex = getPrevVisibleIndex(index);
+                swapPlayerNames(index, targetIndex);
+                setSelectedPlayer(targetIndex);
+                return;
+            }
+
+            const moveDownBtn = e.target.closest('.move-down-btn');
+            if (moveDownBtn) {
+                const index = Number(moveDownBtn.dataset.index);
+                const targetIndex = getNextVisibleIndex(index);
+                swapPlayerNames(index, targetIndex);
+                setSelectedPlayer(targetIndex);
+                return;
+            }
+        });
+
+        viewInput.dataset.bound = 'true';
+    }
 
     const saveBtn = document.getElementById('saveBtn');
     if (saveBtn && !saveBtn.dataset.bound) {
@@ -230,13 +376,6 @@ function setupEvents() {
         cancelBtn.addEventListener('click', cancelEditMode);
         btnWrapper.appendChild(cancelBtn);
     }
-
-    document.getElementById('view-input')?.addEventListener('click', (e) => {
-    if (e.target.classList.contains('p-name-input')) {
-        const index = Number(e.target.id.split('-')[1]);
-        openNicknameDialog(index);
-    }
-});
 }
 
 export function applySettingsToUI() {
@@ -250,6 +389,10 @@ export function applySettingsToUI() {
         p4Row.style.display = state.gameSettings.gameType === 3 ? 'none' : 'flex';
     }
 
+    if (state.gameSettings.gameType === 3 && selectedPlayerIndex === 3) {
+        setSelectedPlayer(0);
+    }
+
     updateScoreBoard();
 }
 
@@ -261,7 +404,7 @@ function updateScoreBoard() {
     if (!saveBtn) return;
 
     let sum = (parseInt(depositInput?.value) || 0) * 100;
-    const playerCount = state.gameSettings.gameType === 3 ? 3 : 4;
+    const playerCount = getVisiblePlayerCount();
 
     for (let i = 0; i < playerCount; i++) {
         sum += (parseInt(scoreInputs[i].value) || 0) * 100;
@@ -275,10 +418,9 @@ function updateScoreBoard() {
     const statusText = document.getElementById('score-status');
     const scoreboard = document.getElementById('scoreboard');
 
-    const nameInputs = document.querySelectorAll('.p-name-input');
     let allFilled = true;
     for (let i = 0; i < playerCount; i++) {
-        if (!nameInputs[i].value.trim() || !scoreInputs[i].value.trim()) {
+        if (!getPlayerNameValue(i) || !scoreInputs[i].value.trim()) {
             allFilled = false;
             break;
         }
@@ -306,10 +448,13 @@ function updateScoreBoard() {
         }
     } else {
         if (statusText) {
-            if (!allFilled) statusText.innerText = `${playerCount} ${t('need')}`;
-            else if (diff > 0) statusText.innerText = `${diff.toLocaleString()} ${t('need')}`;
-            else statusText.innerText = `${Math.abs(diff).toLocaleString()} Over`;
-            statusText.style.color = "var(--error)";
+            if (total === state.gameSettings.totalScore && allFilled) {
+                statusText.innerText = "OK";
+                statusText.style.color = "var(--success)";
+            } else {
+                statusText.innerText = Math.abs(diff).toLocaleString();
+                statusText.style.color = "var(--error)";
+            }
         }
         if (scoreboard) scoreboard.classList.remove('valid');
 
@@ -339,9 +484,7 @@ async function handleSaveRecord() {
         const gameLength = isSouthRound ? 2 : 1;
         const deposit = (parseInt(document.getElementById('deposit').value) || 0) * 100;
 
-        const nameInputs = document.querySelectorAll('.p-name-input');
         const scoreInputs = document.querySelectorAll('.p-score');
-
         const targetUuid = editModeUuid || crypto.randomUUID();
 
         let targetSeqNo;
@@ -382,13 +525,13 @@ async function handleSaveRecord() {
             yearMonth: editModeOriginalRecord ? editModeOriginalRecord.yearMonth : yearMonth,
             gameType: state.gameSettings.gameType,
             gameLength,
-            p1Name: nameInputs[0].value.trim(),
+            p1Name: getPlayerNameValue(0),
             p1Score: parseInt(scoreInputs[0].value) * 100,
-            p2Name: nameInputs[1].value.trim(),
+            p2Name: getPlayerNameValue(1),
             p2Score: parseInt(scoreInputs[1].value) * 100,
-            p3Name: nameInputs[2].value.trim(),
+            p3Name: getPlayerNameValue(2),
             p3Score: parseInt(scoreInputs[2].value) * 100,
-            p4Name: state.gameSettings.gameType === 4 ? nameInputs[3].value.trim() : "",
+            p4Name: state.gameSettings.gameType === 4 ? getPlayerNameValue(3) : "",
             p4Score: state.gameSettings.gameType === 4 ? parseInt(scoreInputs[3].value) * 100 : 0,
             deposit,
             status: editModeOriginalRecord?.status === "DELETED" ? "DELETED" : (editModeOriginalRecord?.status || "SUCCESS"),
@@ -444,6 +587,7 @@ async function handleSaveRecord() {
 
         clearInputs();
         cancelEditMode();
+        alert(t('input_success'));
     } catch (error) {
         console.error("❌ 저장/수정 실패:", error);
         alert("Failed. (" + error.message + ")");
@@ -473,16 +617,11 @@ function clearInputs() {
         }
     });
 
-    document.querySelectorAll('.p-name-input').forEach(input => {
-        input.value = '';
-        const group = document.getElementById(`name-group-${input.id.split('-')[1]}`);
-        if (group) group.classList.remove('filled');
-    });
+    for (let i = 0; i < 4; i++) {
+        setPlayerNameValue(i, '');
+    }
 
-    document.querySelectorAll('.p-name-select').forEach(select => {
-        select.value = '';
-    });
-
+    setSelectedPlayer(0);
     updateScoreBoard();
 }
 
@@ -561,25 +700,15 @@ export function loadRecordForEdit(record) {
     ];
 
     players.forEach((p, i) => {
-        const nameInput = document.getElementById(`name-${i}`);
+        setPlayerNameValue(i, p.name || "");
+
         const scoreInput = document.getElementById(`score-${i}`);
-
-        if (nameInput) {
-            nameInput.value = p.name || "";
-            const group = document.getElementById(`name-group-${i}`);
-            if (group) group.classList.toggle('filled', !!p.name);
-        }
-
         if (scoreInput && p.score !== undefined && p.score !== "") {
             scoreInput.value = p.score === 0 ? 0 : p.score / 100;
             const wrapper = scoreInput.closest('.input-box-wrapper');
             wrapper?.classList.add('filled');
             wrapper?.classList.remove('error');
         }
-    });
-
-    document.querySelectorAll('.p-name-select').forEach((select, i) => {
-        select.value = players[i]?.name || '';
     });
 
     const depositInput = document.getElementById('deposit');
@@ -590,6 +719,7 @@ export function loadRecordForEdit(record) {
         wrapper?.classList.remove('error');
     }
 
+    setSelectedPlayer(0);
     document.getElementById('cancelEditBtn').style.display = 'block';
     updateScoreBoard();
 }
@@ -626,35 +756,52 @@ function renderRecentNicknameChips(recentNicknames) {
     recentNicknames.forEach(name => {
         const btn = document.createElement('button');
         btn.type = 'button';
+        btn.className = 'recent-history-chip';
         btn.textContent = name;
-        btn.style.padding = '8px 12px';
-        btn.style.border = '1px solid #ddd';
-        btn.style.borderRadius = '999px';
-        btn.style.background = '#fff';
-        btn.style.cursor = 'pointer';
-        btn.style.fontSize = '13px';
 
         btn.addEventListener('click', () => {
-            if (currentNicknameTargetIndex == null) return;
-            applyNicknameToPlayer(currentNicknameTargetIndex, name);
+            applyNicknameToPlayer(selectedPlayerIndex, name, { advance: true });
         });
 
         chipWrap.appendChild(btn);
     });
 }
 
-function applyNicknameToPlayer(index, name) {
-    const input = document.getElementById(`name-${index}`);
-    const group = document.getElementById(`name-group-${index}`);
-    if (!input || !group) return;
+function clearDuplicateNicknameFromOtherSlots(targetIndex, name) {
+    const clean = (name || "").trim();
+    if (!clean) return;
 
-    input.value = name;
-    group.classList.toggle('filled', !!name.trim());
+    const visible = getVisiblePlayerCount();
+
+    for (let i = 0; i < visible; i++) {
+        if (i === targetIndex) continue;
+
+        if (getPlayerNameValue(i) === clean) {
+            setPlayerNameValue(i, '');
+        }
+    }
+}
+
+function applyNicknameToPlayer(index, name, options = {}) {
+    const { advance = false } = options;
+    const clean = (name || "").trim();
+
+    setSelectedPlayer(index);
+
+    // 같은 닉네임이 다른 칸에 이미 있으면 그 칸을 비움
+    clearDuplicateNicknameFromOtherSlots(index, clean);
+
+    addNicknameToCache(clean);
+    setPlayerNameValue(index, clean);
     updateScoreBoard();
+
+    if (advance) {
+        advanceSelectedPlayer();
+    }
 }
 
 function openNicknameDialog(targetIndex) {
-    currentNicknameTargetIndex = targetIndex;
+    setSelectedPlayer(targetIndex);
 
     const root = document.getElementById('nickname-dialog-root');
     if (!root) return;
@@ -721,7 +868,7 @@ function openNicknameDialog(targetIndex) {
                             cursor:pointer;
                         "
                     >
-                        ${t('save')}
+                        ${t('direct_input_create')}
                     </button>
                 </div>
 
@@ -785,6 +932,15 @@ function openNicknameDialog(targetIndex) {
         renderFilteredList(e.target.value);
     });
 
+    searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            const value = searchInput.value.trim();
+            if (!value) return;
+            applyNicknameToPlayer(targetIndex, value);
+            closeDialog();
+        }
+    });
+
     directBtn.addEventListener('click', () => {
         const value = searchInput.value.trim();
         if (!value) return;
@@ -799,5 +955,6 @@ function openNicknameDialog(targetIndex) {
         closeDialog();
     });
 
+    renderFilteredList('');
     searchInput.focus();
 }

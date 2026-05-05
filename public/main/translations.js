@@ -28,6 +28,9 @@ export const translations = {
         cancel_edit: "수정 취소",
         save_record: "기록 저장하기", // 추가
         need: "필요", // 추가
+        input_history: "이전 기록",
+        direct_input_create: "직접입력/생성",
+        input_success: "입력 성공했습니다.",
         
         // 목록 탭
         no_record: "기록이 없습니다.",
@@ -75,6 +78,7 @@ export const translations = {
         restore: "Restore",
         confirm_delete: "Are you sure you want to delete this record?",
         logout: "Logout", // 🌟 추가
+        input_success: "Input completed successfully.",
         
         // 입력 탭
         east: "E",
@@ -90,6 +94,8 @@ export const translations = {
         cancel_edit: "Cancel Edit",
         save_record: "Save Record", // 추가
         need: "Needed", // 추가
+        input_history: "Input History",
+        direct_input_create: "Direct Input/Create",
         
         // 목록 탭
         no_record: "No records found.",
@@ -136,6 +142,8 @@ export const translations = {
         restore: "復旧",
         confirm_delete: "この記録を削除しますか？",
         logout: "ログアウト", // 🌟 추가
+        direct_input_create: "直接入力/作成",
+        input_success: "入力が完了しました。",
 
         // 입력 탭
         east: "東",
@@ -151,6 +159,7 @@ export const translations = {
         cancel_edit: "修正キャンセル",
         save_record: "記録を保存する", // 추가
         need: "必要", // 추가
+        input_history: "入力履歴",
 
         // 목록 탭
         no_record: "記録がありません。",
@@ -197,6 +206,7 @@ export const translations = {
         restore: "恢复",
         confirm_delete: "您确定要删除此记录吗？",
         logout: "登出", // 🌟 추가
+        input_history: "输入记录",
 
         // 입력 탭
         east: "东",
@@ -212,6 +222,8 @@ export const translations = {
         cancel_edit: "取消修改",
         save_record: "保存记录",
         need: "需要",
+        direct_input_create: "直接输入/创建",
+        input_success: "输入成功。",
 
         // 목록 탭
         no_record: "没有记录。",
