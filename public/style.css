@@ -94,7 +94,6 @@ body {
     border: 1px solid #d9d9df;
     border-radius: 10px;
     background: #fff;
-    font-size: 12px;
     display: flex;
     align-items: center;
     padding: 0 12px;
@@ -293,7 +292,7 @@ body {
     width: 65%; /* 인풋창 비율 */
     border: none;
     padding: 0 8px;
-    font-size: 10px;
+    font-size: 15px;
     font-weight: bold;
     outline: none;
     text-align: center;
@@ -307,10 +306,9 @@ body {
     border-radius: 8px;
     display: flex; 
     align-items: center; 
-    font-size: 12px;
     padding: 0 8px; 
     background: white;
-    min-width: 80px; /* 점수 영역 최소 폭 소폭 확보 */
+    min-width: 10px; /* 점수 영역 최소 폭 소폭 확보 */
 }
 
 .input-box-wrapper input {
@@ -585,4 +583,25 @@ body {
     .nickname-list {
         max-height: none;
     }
+}
+
+/* 최종 미세조정: 닉네임/점수 박스 폰트 및 +/- 토글 버튼 크기 */
+.name-slot-box,
+.name-slot-value,
+.name-slot-value.placeholder {
+    font-size: 11px !important;
+}
+
+.input-box-wrapper,
+.input-box-wrapper input,
+.input-suffix {
+    font-size: 11px !important;
+}
+
+.score-sign-toggle {
+    width: 22px !important;
+    min-width: 22px !important;
+    height: 22px !important;
+    font-size: 15px !important;
+    margin-right: 3px !important;
 }
