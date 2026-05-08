@@ -269,6 +269,9 @@ function setupEvents() {
 
     if (btnSouth && !btnSouth.dataset.bound) {
         btnSouth.addEventListener('click', () => {
+            if (btnSouth.classList.contains('active')) return;
+            if (!window.confirm('남장으로 변경합니다')) return;
+
             btnSouth.classList.add('active');
             btnEast?.classList.remove('active');
         });
@@ -277,6 +280,9 @@ function setupEvents() {
 
     if (btnEast && !btnEast.dataset.bound) {
         btnEast.addEventListener('click', () => {
+            if (btnEast.classList.contains('active')) return;
+            if (!window.confirm('동장으로 변경합니다')) return;
+
             btnEast.classList.add('active');
             btnSouth?.classList.remove('active');
         });
@@ -937,6 +943,7 @@ function closeNicknameDialog({ fromPopState = false } = {}) {
     const root = document.getElementById('nickname-dialog-root');
     if (!root || root.style.display === 'none') return;
 
+    blockNicknameDialogTrailingTouch();
     root.style.display = 'none';
     root.innerHTML = '';
 
@@ -968,6 +975,97 @@ function focusNicknameInputSafely() {
                 input.focus({ preventScroll: true });
             }, 80);
         });
+    });
+}
+
+
+let nicknameDialogTouchBlockUntil = 0;
+
+function blockNicknameDialogTrailingTouch(durationMs = 450) {
+    nicknameDialogTouchBlockUntil = Math.max(nicknameDialogTouchBlockUntil, Date.now() + durationMs);
+}
+
+if (!window.__mahjongNicknameDialogTouchShieldBound) {
+    window.__mahjongNicknameDialogTouchShieldBound = true;
+    ['click', 'touchend', 'pointerup'].forEach((eventName) => {
+        document.addEventListener(eventName, (event) => {
+            if (Date.now() <= nicknameDialogTouchBlockUntil) {
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+            }
+        }, true);
+    });
+}
+
+function stopNicknameDialogEvent(event) {
+    event.stopPropagation();
+}
+
+function makeSafeDialogPointerSelect({ container, itemSelector, onSelect }) {
+    let startX = 0;
+    let startY = 0;
+    let startTime = 0;
+    let startItem = null;
+    let cancelled = false;
+
+    container.addEventListener('pointerdown', (event) => {
+        const item = event.target.closest(itemSelector);
+        if (!item) return;
+
+        event.stopPropagation();
+        startX = event.clientX;
+        startY = event.clientY;
+        startTime = Date.now();
+        startItem = item;
+        cancelled = false;
+    });
+
+    container.addEventListener('pointermove', (event) => {
+        if (!startItem) return;
+
+        const dx = Math.abs(event.clientX - startX);
+        const dy = Math.abs(event.clientY - startY);
+        if (dx > 10 || dy > 10) {
+            cancelled = true;
+        }
+    });
+
+    container.addEventListener('pointercancel', () => {
+        cancelled = true;
+        startItem = null;
+    });
+
+    container.addEventListener('pointerup', (event) => {
+        const item = event.target.closest(itemSelector);
+        if (!startItem || !item || item !== startItem) {
+            startItem = null;
+            return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        const elapsed = Date.now() - startTime;
+        const dx = Math.abs(event.clientX - startX);
+        const dy = Math.abs(event.clientY - startY);
+        const shouldIgnore = cancelled || dx > 10 || dy > 10 || elapsed > 650;
+
+        const selectedItem = startItem;
+        startItem = null;
+        cancelled = false;
+
+        if (shouldIgnore) return;
+
+        blockNicknameDialogTrailingTouch();
+        onSelect(selectedItem, event);
+    });
+
+    container.addEventListener('click', (event) => {
+        if (event.target.closest(itemSelector)) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
     });
 }
 
@@ -1062,11 +1160,21 @@ function openNicknameDialog(targetIndex) {
         closeNicknameDialog();
     }
 
+    ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'click'].forEach((eventName) => {
+        overlay.addEventListener(eventName, (event) => {
+            if (event.target !== overlay) return;
+            event.stopPropagation();
+        });
+        panel.addEventListener(eventName, stopNicknameDialogEvent);
+    });
+
     overlay.addEventListener('click', (e) => {
+        e.stopPropagation();
         if (e.target === overlay) closeNicknameDialog();
     });
 
     panel.addEventListener('pointerdown', (event) => {
+        event.stopPropagation();
         const target = event.target;
         if (target.closest('button') || target.closest('.nickname-item')) return;
         setTimeout(() => {
@@ -1074,13 +1182,18 @@ function openNicknameDialog(targetIndex) {
         }, 0);
     });
 
-    searchInput.addEventListener('pointerdown', () => {
+    searchInput.addEventListener('pointerdown', (event) => {
+        event.stopPropagation();
         setTimeout(() => {
             searchInput.focus({ preventScroll: true });
         }, 0);
     });
 
-    closeBtn.addEventListener('click', () => closeNicknameDialog());
+    closeBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        closeNicknameDialog();
+    });
 
     searchInput.addEventListener('input', () => {
         renderFilteredList(searchInput.value);
@@ -1106,13 +1219,20 @@ function openNicknameDialog(targetIndex) {
         }
     });
 
-    directBtn.addEventListener('click', applyDirectInput);
+    directBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        applyDirectInput();
+    });
 
-    list.addEventListener('click', (e) => {
-        const item = e.target.closest('.nickname-item');
-        if (!item) return;
-        applyNicknameToPlayer(targetIndex, item.dataset.name || '');
-        closeNicknameDialog();
+    makeSafeDialogPointerSelect({
+        container: list,
+        itemSelector: '.nickname-item',
+        onSelect: (item) => {
+            searchInput.blur();
+            applyNicknameToPlayer(targetIndex, item.dataset.name || '');
+            closeNicknameDialog();
+        }
     });
 
     renderFilteredList('');

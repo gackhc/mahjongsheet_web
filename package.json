@@ -19,9 +19,10 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "vite public",
     "build": "firebase deploy --only hosting",
-    "dh": "firebase deploy --only hosting",
+    "d": "firebase deploy",
     "df": "firebase deploy --only functions",
-    "da": "firebase deploy --only hosting,functions"
+    "da": "firebase deploy --only hosting,functions",
+    "dh": "firebase deploy --only hosting"
   },
   "devDependencies": {
     "vite": "^8.0.3"
